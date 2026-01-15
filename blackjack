@@ -1,5 +1,6 @@
 import random
 # ================== DECK ==================
+
 deck = ["♠A","♠2","♠3","♠4","♠5","♠6","♠7","♠8","♠9","♠10","♠J","♠Q","♠K",
         "♥A","♥2","♥3","♥4","♥5","♥6","♥7","♥8","♥9","♥10","♥J","♥Q","♥K",
         "♦A","♦2","♦3","♦4","♦5","♦6","♦7","♦8","♦9","♦10","♦J","♦Q","♦K",
@@ -35,8 +36,14 @@ def calculate_hand(hand): #hand is a variable to use
     return total
 
 # ============= Pair checking ==============
-def is_pair(hand):  #pair checking
-    return len(hand) == 2 and hand[0][1:] == hand[1][1:]
+def card_rank(card):
+    return card[1:]
+
+def is_pair(hand):
+    if len(hand) != 2:
+        return False
+    return card_rank(hand[0]) == card_rank(hand[1])
+
 
 # ============= Ace checking===============
 def is_ace(card): #Ace card checking
@@ -125,18 +132,21 @@ def player_turn(initial_hand, initial_bet, player_capital):
                     break  # auto-stand on both ace hands
 
                 # ----- NORMAL SPLIT -----
-                h1 = [c1, deal_card()] #first split hand
-                h2 = [c2, deal_card()] #second split hand
+                h1 = [c1, deal_card()]
+                h2 = [c2, deal_card()]
 
-                hands[hand_index] = h1 #Replace the current hand
+                hands[hand_index] = h1
                 hands.insert(hand_index + 1, h2)
                 bets.insert(hand_index + 1, bet)
 
+                hand = h1  # ✅ refresh local reference
+
                 print("Hand split.")
-                print(f"Now your FIRST hand is Player hand {hand_index+1}: {h1} ({calculate_hand(hand)}), you have £{player_capital}.")
+                print(
+                    f"Now your FIRST hand is Player hand {hand_index + 1}: {hand} ({calculate_hand(hand)}), you have £{player_capital}.")
 
                 first_action = True
-                continue  # ✅ stay on first split hand
+                continue
 
 
             else:
@@ -205,13 +215,84 @@ while new_game:
 
         # Deal cards
         player_card = [deal_card(), deal_card()]
-        dealer_card = [deal_card(), deal_card()]
+        dealer_card = [deal_card()]
 
         dealer_hand = calculate_hand(dealer_card)
 
         print(f"\nPlayer hand: {player_card} ({calculate_hand(player_card)})")
 
         print(f"Dealer shows: {dealer_card[0]}")
+        # ================= INSURANCE =================
+        insurance_bet = 0
+
+        if dealer_card[0][1:] == "A":
+            print("\nDealer shows an Ace. Insurance available.")
+
+            while True:
+                try:
+                    take_insurance = int(input("Take insurance? (1 = Yes, 2 = No): "))
+                    if take_insurance not in (1, 2):
+                        print("Choose 1 or 2.")
+                        continue
+                    break
+                except ValueError:
+                    print("Type 1 or 2 only.")
+
+            if take_insurance == 1:
+                max_insurance = main_bet // 2
+
+                while True:
+                    try:
+                        insurance_bet = int(input(f"Enter insurance bet (max £{max_insurance}): £"))
+                        if insurance_bet < 0 or insurance_bet > max_insurance:
+                            print(f"Insurance must be between £0 and £{max_insurance}.")
+                            continue
+                        if insurance_bet > player_capital:
+                            print("Not enough capital.")
+                            continue
+                        break
+                    except ValueError:
+                        print("Type numbers only.")
+
+                player_capital -= insurance_bet
+        # ================= DEALER BLACKJACK CHECK =================
+        if calculate_hand(dealer_card) == 21:
+            print("\nDealer has Blackjack!")
+
+            if insurance_bet > 0:
+                insurance_win = insurance_bet * 3
+                player_capital += insurance_win
+                print(f"Insurance wins 2:1. You receive £{insurance_win}.")
+
+            # resolve main bet
+            if calculate_hand(player_card) == 21:
+                player_capital += main_bet
+                print("Push on Blackjack.")
+            else:
+                print("You lose main bet.")
+
+            continue  # end round
+
+        # ================= EVEN MONEY =================
+        if calculate_hand(player_card) == 21 and len(player_card) == 2 and dealer_card[0][1:] == "A":
+            print("\nYou have Blackjack and dealer shows an Ace.")
+            print("Even Money available (pays 1:1 immediately).")
+
+            while True:
+                try:
+                    even_money = int(input("Take Even Money? (1 = Yes, 2 = No): "))
+                    if even_money not in (1, 2):
+                        print("Choose 1 or 2.")
+                        continue
+                    break
+                except ValueError:
+                    print("Type 1 or 2 only.")
+
+            if even_money == 1:
+                player_capital += main_bet * 2
+                print(f"Even Money taken. You win £{main_bet}. Now you have £{player_capital}.")
+                continue  # end round immediately
+
 
         # ================= SIDE BETS =================
 
@@ -246,7 +327,7 @@ while new_game:
                 return 9, "Flush"
             return 0, None
 
-        payout, side_bet_name = side_bet_payout(player_card, dealer_card[0])
+        payout, side_bet_name = side_bet_payout(player_card, dealer_card[0]) #payout and side_bet_name are the return value
 
         if payout > 0:
             player_capital += side_bet * (payout + 1)
